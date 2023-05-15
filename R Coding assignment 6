@@ -1,0 +1,40 @@
+# LOAD DATA
+library(readxl)
+Net_Exports_India <- read_excel("C:/Users/Veere/Downloads/Net Exports India.xlsx")
+
+# DEFINE TIME SERIES
+NX = Net_Exports_India$NX
+nv <- length(NX)
+
+NX.ts <- ts(NX[2:nv], start = c(1990,2), end = c(2022,12), freq = 12)
+NXlag.ts <- ts(NX[1:nv-1], start = c(1990,1), end = c(2022,11), freq = 12)
+
+
+# STRUCTURAL NX FORECAST W/ TREND BASED ON WORLD INFLATION RATES
+spot <- read_excel("C:/Users/Veere/Downloads/Rupee Spot Rate.xlsx",
+                   sheet = "FRED Graph")
+spot.ts <- ts(spot$S[2:nv],start = c(1990,2), end = c(2022,12), freq = 12)
+spotlag.ts <- ts(spot$S[1:nv-1],start = c(1990,2), end = c(2022,12), freq = 12)
+
+
+train.gs.linear.trend <- tslm(NX.ts ~ spot.ts + spotlag.ts + trend)
+summary(train.gs.linear.trend)
+gs.res = resid(train.gs.linear.trend)
+plot(gs.res, type = 'l', xlab = 'Date', ylab = "Residuals", main = 'Structural Model Residuals',
+     lty = 1, col = 'red')
+
+library(forecast)
+nValid <- 60
+nTrain <- length(NX.ts) - nValid
+yTrain.ts <- window(NX.ts, start = c(1990, 2), end = c(1990, nTrain))
+test <- data.frame(cbind(spot.ts, spotlag.ts))
+xTrain.ts <- ts(test, start = c(1990, 2), end = c(1990, nTrain))
+
+stlm.reg.fit <- stlm(yTrain.ts, s.window = "periodic", xreg = xTrain.ts, method = "arima") 
+stlm.reg.fit$model
+
+xTest.ts <- ts(xTrain.ts, start = c(1990, nTrain + 1), end = c(1990, nTrain + nValid)) 
+stlm.reg.pred <- forecast(stlm.reg.fit, xreg = xTest.ts, h = nValid)
+plot(stlm.reg.pred, xlab = "Date", ylab = "xxx ")
+lines(NX.ts)
+accuracy(stlm.reg.pred)
